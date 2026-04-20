@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>棚卸入力 | 令和7年度4月</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Noto Sans JP', 'Hiragino Sans', sans-serif;
+    background: #F7F5F0;
+    color: #2C2C2C;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :root {
+    --primary: #2D5A3D;
+    --primary-light: #E8F0EB;
+    --primary-dark: #1B3726;
+    --accent: #C4763A;
+    --accent-light: #FFF3EB;
+    --text: #2C2C2C;
+    --text-sub: #7A7A7A;
+    --border: #E8E4DD;
+    --card: #FFFFFF;
+    --danger: #C94444;
+    --danger-light: #FFF0F0;
+    --success: #2D8A4E;
+    --success-light: #E8F8EE;
+    --bg: #F7F5F0;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+// ─── GAS Web App URL ───
+const GAS_URL = "https://script.google.com/macros/s/AKfycbzX8XHcpXFLF1MS8mLQJI13KBudy9jMTN2S2y4RR4ZXYcsJq0XWyWitCEz4bjB1v2yutA/exec";
+
+// ─── Store List ───
+const STORES = [
+  "鴨池", "天文館", "大塚", "イオン中央", "姶良",
+  "柳丸", "乙金", "清水新地", "千早", "小林",
+  "宮崎観光ホテルガーデンズ", "バンズ", "佐賀駅", "ソフ", "さつまち",
+  "センテラス", "新下関", "宮崎アミュ", "伊集院", "志布志",
+];
+
+// ─── Product Master Data ───
+const SUPPLIERS = {
+  "(株)丸菱": [
+    { name: "大陽製粉ボンマルシェ 25kg", unit: "袋", price: 2950 },
+    { name: "日本製粉 丸菱モンタージュ 25kg", unit: "袋", price: 4118 },
+    { name: "ブレフランセ 25kg", unit: "袋", price: 3743 },
+    { name: "ニップン SUMOMO専用粉 25kg", unit: "袋", price: 3647 },
+    { name: "大日本明治製糖 グラニュー糖 30kg", unit: "袋", price: 6441 },
+    { name: "丸菱 蜂蜜ポリ 2.4kg", unit: "本", price: 2075 },
+    { name: "オリエンタル ミルプレ350SP", unit: "kg", price: 2393 },
+    { name: "USA カリフォルニアレーズン30P", unit: "箱", price: 6966 },
+    { name: "USA ドライクランベリー 11.34kg", unit: "箱", price: 9497 },
+    { name: "USA クルミL.M.P 13.6kg", unit: "箱", price: 21133 },
+    { name: "ブルーダイヤ アーモンドスライス 11.34kg", unit: "箱", price: 17290 },
+    { name: "北村商店 炒り黒胡麻 1kg", unit: "袋", price: 638 },
+    { name: "北村商店 炒り白胡麻 1kg", unit: "袋", price: 588 },
+    { name: "サフ インスタントドライイースト金 500g", unit: "個", price: 830 },
+    { name: "サフ インスタントドライイースト赤 500g", unit: "個", price: 718 },
+    { name: "丸菱 モルトフラワー 2kg", unit: "袋", price: 1200 },
+    { name: "パリッとジューシーウインナー 45g×22", unit: "袋", price: 1020 },
+    { name: "ミヨシ油脂 ガーリックスプレッド LT", unit: "kg", price: 1045 },
+    { name: "シママース 沖縄の塩 20kg", unit: "袋", price: 4000 },
+    { name: "共栄フード パン粉FE402GFJ 2kg", unit: "袋", price: 731 },
+    { name: "丸菱シュガーP 1kg", unit: "袋", price: 315 },
+    { name: "QP マヨネーズ102S 1kg", unit: "個", price: 461 },
+    { name: "丸和油脂 黒豆黄な粉クリーム 500g", unit: "個", price: 463 },
+    { name: "丸和油脂 アルファメープルミックス 700g", unit: "個", price: 533 },
+    { name: "丸菱 レッドココア 1kg", unit: "袋", price: 956 },
+    { name: "小城製粉 泣かないきな粉 1kg", unit: "kg", price: 823 },
+    { name: "イズム 57チュロスプレーン 55g×80", unit: "箱", price: 6565 },
+    { name: "イズム 495発酵バタークロワッサン板 50g×100", unit: "箱", price: 8510 },
+    { name: "きな粉もちもちぱん専用ミックス粉 25kg", unit: "袋", price: 7746 },
+    { name: "ヨネヤマ SUMOMOポリバッグ 500枚", unit: "箱", price: 4.7 },
+    { name: "丸玉印刷 SUMOMOポリ袋S 1枚", unit: "箱", price: 6.6 },
+  ],
+  "白熊商事(株)": [
+    { name: "第一糖業 上白 30kg", unit: "袋", price: 5950 },
+    { name: "ノーサン 鉾卵 白L 10kg", unit: "箱", price: 2290 },
+    { name: "ツキシマ ラブールガトーブルターニュ 10kg", unit: "箱", price: 6800 },
+    { name: "ツキシマ ラブールガトーシートBR 5kg", unit: "箱", price: 3785 },
+    { name: "MCLS ニューランナー 500ml", unit: "本", price: 450 },
+    { name: "チョコファンシールビー42番手 5kg", unit: "箱", price: 3850 },
+    { name: "トウキョウフーズ チョコチップ5B 1kg", unit: "袋", price: 920 },
+    { name: "森永 ホワイトチョコ6号（焼成用）", unit: "袋", price: 1250 },
+    { name: "ソントン ソレイユチョコ 1kg", unit: "個", price: 720 },
+    { name: "ソントン SVガトーキャラメルクリーム 1kg", unit: "個", price: 600 },
+    { name: "ソントン SVカマンベールチーズクリーム 1kg", unit: "個", price: 578 },
+    { name: "ソントン ポシェット大粒ピーナッツサンド 1kg", unit: "個", price: 767 },
+    { name: "ソントン ポシェットサクッとチョコフレーク 1kg", unit: "個", price: 720 },
+    { name: "ソントン とろっと甘口オニオンカレー 1kg", unit: "個", price: 710 },
+    { name: "ともえ食品 完熟トマトのチキンカレー 1kg", unit: "個", price: 730 },
+    { name: "ヤマイチ カナダ小倉55Y 3kg", unit: "個", price: 1590 },
+    { name: "ソントン ノヴェ濃厚海道練乳クリーム", unit: "個", price: 590 },
+    { name: "ソントン フレッシュいちごTB-2 1kg", unit: "個", price: 790 },
+    { name: "ソントン ピロールフレッシュブルーベリーTB-2 1kg", unit: "個", price: 720 },
+    { name: "ソントン ピロールアップルTB-2", unit: "kg", price: 725 },
+    { name: "ツキシマ アシスターフォンデュソース", unit: "kg", price: 785 },
+    { name: "としや製餡 紫芋餡 5kg", unit: "kg", price: 2850 },
+    { name: "QP ベーカリーソース(ハニーマスタード) 700g", unit: "個", price: 540 },
+    { name: "ルサッフル サフ BBJ 500g", unit: "g", price: 1140 },
+    { name: "古城製粉 糖入り泣かないきな粉 1kg", unit: "袋", price: 715 },
+    { name: "ヒノデ製粉 コーンスターチ 小袋 1kg", unit: "袋", price: 200 },
+    { name: "スノーマン SM裏ごし人参", unit: "kg", price: 470 },
+    { name: "オーランド タマゴドーナツ40R-3 100個入り", unit: "箱", price: 2500 },
+    { name: "ともえ食品 メイチェルバナナクリーム", unit: "kg", price: 530 },
+    { name: "ソントン メイクアップホワイト 350g", unit: "個", price: 230 },
+    { name: "タヌマ 冷凍ぎょうひフィリング大粒(白) 500g", unit: "P", price: 420 },
+    { name: "ソントン 西尾の抹茶クリーム", unit: "個", price: 610 },
+    { name: "ソントン とちおとめいちごミルククリーム", unit: "個", price: 600 },
+    { name: "アラカワ 純白紙 394×545 1000枚", unit: "個", price: 3000 },
+    { name: "音羽産業 OPシート300×400 1000枚", unit: "箱", price: 2100 },
+    { name: "ヨシヨ PV-500特価半斤用食パン袋 100枚", unit: "個", price: 337 },
+    { name: "ヨシヨ PV-3000特価3斤用食パン袋 100枚", unit: "個", price: 1050 },
+    { name: "イーラップス 1斤用PP食パン袋 1000枚", unit: "枚", price: 4 },
+    { name: "ヨシヨ PV-25OPPパン袋15×25中 500枚", unit: "個", price: 1380 },
+    { name: "ヨシヨ M-214 ベーキングペーパー(両面)6取 300枚", unit: "袋", price: 6800 },
+    { name: "旭創業 ニトリル手袋S盛付用(ブルー) 100枚", unit: "箱", price: 600 },
+    { name: "旭創業 ニトリル手袋M盛付用(ブルー) 100枚", unit: "箱", price: 600 },
+    { name: "ヨシヨ KG-530フレームガードオーブンミット42cm", unit: "個", price: 2070 },
+    { name: "上野フードバクト キルバクトSU 20L", unit: "個", price: 4000 },
+    { name: "ヨシヨ KG-9015-6 テフロンベーキングシート6取", unit: "CS", price: 6300 },
+  ],
+  "UCCフーズ(株)": [
+    { name: "UCCグランゼエスプレッソ(豆) 500g", unit: "個", price: 900 },
+    { name: "ケンコー グルメソースカレー 1kg", unit: "個", price: 630 },
+    { name: "ケンコー クリーミーグラタンベース 1kg", unit: "個", price: 638 },
+    { name: "ケンコー 明太マヨネーズタイプ 1kg", unit: "個", price: 894 },
+    { name: "RCH サラダ油 16.5kg", unit: "缶", price: 2700 },
+    { name: "RCH パセリ L缶 80g", unit: "缶", price: 598 },
+    { name: "RCH トマトケチャップ フィルムパック 3kg", unit: "個", price: 575 },
+    { name: "RCH タルタルソース 1kg", unit: "個", price: 504 },
+    { name: "四国日清 霧島黒豚メンチカツ 冷凍45g 60個", unit: "箱", price: 1768 },
+    { name: "神栄 中国産白身フライ 冷凍60g 100枚", unit: "箱", price: 2651 },
+    { name: "Dino ピュアオリーブオイル 1L", unit: "本", price: 1015 },
+    { name: "RCH 金ごまごぼうサラダ(ささがき) 1kg", unit: "個", price: 707 },
+    { name: "RCH 北海道4種のチーズソース 300g", unit: "個", price: 450 },
+    { name: "クラフト FS Hゴーダスライス 585g", unit: "個", price: 1050 },
+    { name: "マリンフード オーストラリアンチーズパウダー 1kg", unit: "個", price: 2080 },
+    { name: "エクシード オニオン&コールスロー 1kg", unit: "個", price: 615 },
+    { name: "RCH とんかつソース 1.8L", unit: "本", price: 520 },
+    { name: "トロナ ピザソース 1kg", unit: "個", price: 480 },
+    { name: "ケンコー ベーカーズマヨネーズ 1kg", unit: "個", price: 430 },
+    { name: "こいくちしょうゆ 1.8L", unit: "本", price: 430 },
+    { name: "RCH たまごサラダ 1kg", unit: "個", price: 880 },
+    { name: "RCH かくぎりポテト 1kg", unit: "個", price: 358 },
+    { name: "ホクレン 十勝の乱切りカントリーポテト 1kg", unit: "袋", price: 399 },
+    { name: "伊藤ハム 皮なしチョリソーウインナー 20本", unit: "袋", price: 531 },
+    { name: "中国産グリーンアスパラM 500g", unit: "袋", price: 462 },
+    { name: "RCH ロースハムスライス 500g", unit: "個", price: 638 },
+    { name: "スカー こだわりの抹茶ホイップ 冷凍 600g", unit: "個", price: 383 },
+    { name: "スカー ホイップdeキャラメル 冷凍 600g", unit: "個", price: 393 },
+    { name: "スカー ホイップストロベリーR 600g", unit: "個", price: 383 },
+    { name: "霧の紅茶 アールグレイ 200g", unit: "袋", price: 700 },
+    { name: "ライフフーズ カーネルコーン 1kg", unit: "袋", price: 349 },
+    { name: "中国産 むき枝豆 500g", unit: "袋", price: 177 },
+    { name: "アルマニーノ バジルペースト 820g", unit: "個", price: 1800 },
+    { name: "TMまんぞくコロッケ 100g 12個", unit: "袋", price: 408 },
+    { name: "九食 ABベーコン 1kg", unit: "袋", price: 953 },
+    { name: "ナンチク 国産ポークウインナー 1kg", unit: "袋", price: 805 },
+    { name: "G/Fブルーベリー(ホール) 500g", unit: "袋", price: 686 },
+    { name: "G/Fラズベリー(ホール) 500g", unit: "袋", price: 758 },
+    { name: "だし香るソース焼きそば 200g", unit: "個", price: 170 },
+    { name: "RCH ブラックペッパーあらびきL缶 370g", unit: "缶", price: 1067 },
+    { name: "正栄 カラースプレーNB 500g", unit: "袋", price: 1400 },
+    { name: "BM1杯ドリップマシン専用ロールペーパー 120m×5巻", unit: "個", price: 15600 },
+    { name: "サンデン1杯ドリップマシン専用クリーニングタブレット 100P", unit: "個", price: 3400 },
+    { name: "UCC 断熱カップSM-205D 60入", unit: "袋", price: 345 },
+    { name: "ジャパックス ゴミ袋HD45L半透明S-53 10枚入", unit: "袋", price: 85 },
+    { name: "アルコール製剤 5L", unit: "個", price: 2200 },
+    { name: "ニイタカ 薬用ハンドソープコンク 500g", unit: "個", price: 475 },
+    { name: "お店のためのブリーチ 5.5kg", unit: "個", price: 1200 },
+    { name: "スーパーセラン 4kg", unit: "個", price: 2300 },
+    { name: "ニトリルソフトブルー(ノンパウダー) M 100枚", unit: "個", price: 820 },
+    { name: "ラップ 30×100", unit: "本", price: 280 },
+    { name: "ラップ 45×50", unit: "本", price: 280 },
+  ],
+  "(株)九州めいらく": [
+    { name: "大阿蘇牛乳 オオアソスリムLLミルク 1L", unit: "本", price: 193 },
+    { name: "冷凍ホイップトッピング 1L", unit: "個", price: 250 },
+    { name: "YSプロセス80ダイス 1kg", unit: "袋", price: 1100 },
+    { name: "マイルドシュレッド 1kg", unit: "袋", price: 760 },
+    { name: "レッドチェダーSL 560g", unit: "袋", price: 1000 },
+  ],
+  "肉のもり屋": [
+    { name: "黒豚ミンチ", unit: "kg", price: 900 },
+    { name: "ベーコン", unit: "kg", price: 1300 },
+    { name: "ロースハム", unit: "kg", price: 1300 },
+  ],
+  "(株)伊藤園": [
+    { name: "缶 ナタデココ", unit: "本", price: 70 },
+    { name: "紙 ミルクココア", unit: "本", price: 65 },
+    { name: "紙 ビタミンアップル 200ml", unit: "本", price: 65 },
+    { name: "紙 ビタミンオレンジ 200ml", unit: "本", price: 65 },
+    { name: "紙 1日分の野菜 200ml", unit: "本", price: 65 },
+    { name: "紙 ミルクコーヒー", unit: "本", price: 65 },
+    { name: "紙 菌活乳酸菌", unit: "本", price: 65 },
+    { name: "お～いお茶 緑茶", unit: "本", price: 80 },
+    { name: "おーいお茶 ほうじ茶", unit: "本", price: 80 },
+    { name: "健康ミネラル麦茶", unit: "本", price: 74 },
+    { name: "タリーズブラック 缶", unit: "本", price: 91 },
+    { name: "タリーズ無糖ラテ", unit: "本", price: 91 },
+    { name: "生オレンジティー", unit: "本", price: 80 },
+  ],
+  "(株)フレッシュ青果": [
+    { name: "レタス", unit: "個", price: 198 },
+    { name: "玉ねぎ", unit: "kg", price: 140 },
+  ],
+  "その他貯蔵品（包材）": [
+    { name: "タフバックSUMOMO（ベージュ）40号", unit: "袋", price: 3.75 },
+    { name: "タフバックSUMOMO（ベージュ）30号", unit: "袋", price: 1.8 },
+    { name: "トパックハンギングバッグ (東芝テック)", unit: "袋", price: 0.76 },
+  ],
+  "現地調達資材": [],
+};
+
+const SUPPLIER_LIST = Object.keys(SUPPLIERS);
+const fmt = (n) => n != null ? n.toLocaleString("ja-JP") : "—";
+
+// ─── App State ───
+let state = {
+  screen: "store",
+  store: null,
+  supplier: null,
+  inventory: {},
+  completedSuppliers: {},
+  searchQuery: "",
+  submitting: false,
+  submitError: null,
+};
+
+// Initialize inventory
+SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
+
+function setState(updates) {
+  Object.assign(state, updates);
+  render();
+}
+
+function getSupplierTotal(supplierName) {
+  const items = SUPPLIERS[supplierName] || [];
+  const inv = state.inventory[supplierName] || {};
+  let total = 0;
+  items.forEach((item, i) => {
+    const qty = inv[i];
+    if (qty != null && qty !== "") total += parseFloat(qty) * item.price;
+  });
+  return total;
+}
+
+function getGrandTotal() {
+  let total = 0;
+  SUPPLIER_LIST.forEach(s => { total += getSupplierTotal(s); });
+  return total;
+}
+
+function getFilledCount(supplierName) {
+  const inv = state.inventory[supplierName] || {};
+  return Object.values(inv).filter(v => v != null && v !== "" && v !== 0 && v !== "0").length;
+}
+
+function handleQuantityChange(supplierName, itemIndex, value) {
+  state.inventory[supplierName][itemIndex] = value === "" ? "" : value;
+  render();
+}
+
+// ─── Submit to Google Sheets ───
+async function submitToSheet() {
+  setState({ submitting: true, submitError: null });
+  try {
+    const items = [];
+    SUPPLIER_LIST.forEach(supplierName => {
+      const supplierItems = SUPPLIERS[supplierName] || [];
+      const inv = state.inventory[supplierName] || {};
+      supplierItems.forEach((item, i) => {
+        const qty = inv[i];
+        if (qty != null && qty !== "" && parseFloat(qty) > 0) {
+          items.push({
+            supplier: supplierName,
+            name: item.name,
+            unit: item.unit,
+            price: item.price,
+            quantity: parseFloat(qty),
+            amount: Math.round(parseFloat(qty) * item.price),
+          });
+        }
+      });
+    });
+
+    if (items.length === 0) {
+      setState({ submitError: "在庫数量が1件も入力されていません", submitting: false });
+      return;
+    }
+
+    const payload = JSON.stringify({ store: state.store, items: items });
+    const sentAt = Date.now();
+
+    // GAS Web App は POST 時に 302 を返すため no-cors で送信。レスポンスは opaque で読めない。
+    await fetch(GAS_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "text/plain" },
+      body: payload,
+    });
+
+    // 3秒待ってから doGet で確認APIを叩き、入力ログの最新送信時刻と照合して成功判定
+    await new Promise(r => setTimeout(r, 3000));
+
+    const checkUrl = GAS_URL + "?check=1&store=" + encodeURIComponent(state.store);
+    const checkRes = await fetch(checkUrl, { method: "GET" });
+    const checkData = await checkRes.json();
+
+    if (checkData && checkData.lastSentAt) {
+      const lastSentMs = new Date(checkData.lastSentAt).getTime();
+      // 送信開始時刻以降のログがあれば成功
+      if (lastSentMs >= sentAt - 1000) {
+        setState({ screen: "done", submitting: false });
+        return;
+      }
+    }
+    setState({ submitError: "送信確認エラー: ログに記録が見つかりません", submitting: false });
+  } catch (err) {
+    setState({ submitError: "通信エラー: " + err.message, submitting: false });
+  }
+}
+
+function generateCSV() {
+  let csv = "店舗名,取引先,品目,単位,仕入単価,在庫数量,金額\n";
+  SUPPLIER_LIST.forEach(s => {
+    const items = SUPPLIERS[s] || [];
+    const inv = state.inventory[s] || {};
+    items.forEach((item, i) => {
+      const qty = inv[i];
+      if (qty != null && qty !== "") {
+        const amount = parseFloat(qty) * item.price;
+        csv += `"${state.store}","${s}","${item.name}","${item.unit}",${item.price},${qty},${amount}\n`;
+      }
+    });
+  });
+  return csv;
+}
+
+function downloadCSV() {
+  const csv = "\uFEFF" + generateCSV();
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `棚卸_${state.store}_${new Date().toISOString().split("T")[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetAll() {
+  const init = {};
+  SUPPLIER_LIST.forEach(s => { init[s] = {}; });
+  setState({
+    screen: "store", store: null, supplier: null,
+    inventory: init, completedSuppliers: {},
+    searchQuery: "", submitting: false, submitError: null,
+  });
+}
+
+// ─── Render ───
+function render() {
+  const app = document.getElementById("app");
+  
+  if (state.screen === "store") {
+    app.innerHTML = `
+      <div style="min-height:100vh;background:var(--bg)">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:40px 20px 32px;border-radius:0 0 24px 24px">
+          <div style="font-size:13px;color:rgba(255,255,255,0.7);letter-spacing:2px;margin-bottom:6px;font-weight:500">令和7年度 4月</div>
+          <h1 style="color:#fff;font-size:24px;font-weight:700;margin:0">棚卸入力</h1>
+          <div style="color:rgba(255,255,255,0.6);font-size:13px;margin-top:6px">店舗を選択してください</div>
+        </div>
+        <div style="padding:20px 16px">
+          ${STORES.map(s => `
+            <button onclick="setState({store:'${s}',screen:'supplier'})" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:16px 18px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;font-size:16px;font-weight:600;color:var(--text);cursor:pointer;font-family:'Noto Sans JP',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+              <span>${s}</span><span style="font-size:20px;color:var(--text-sub)">›</span>
+            </button>
+          `).join("")}
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (state.screen === "supplier") {
+    const allDone = SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).every(s => state.completedSuppliers[s]);
+    app.innerHTML = `
+      <div style="min-height:100vh;background:var(--bg);padding-bottom:120px">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:20px 16px 24px;border-radius:0 0 24px 24px">
+          <button onclick="setState({screen:'store',store:null,completedSuppliers:{}}); SUPPLIER_LIST.forEach(s=>{state.inventory[s]={}})" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;margin-bottom:12px">← 店舗選択に戻る</button>
+          <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 4px">${state.store}</h2>
+          <div style="color:rgba(255,255,255,0.7);font-size:13px">取引先を選んで在庫数量を入力</div>
+        </div>
+        <div style="padding:16px">
+          ${SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).map(s => {
+            const done = state.completedSuppliers[s];
+            const filled = getFilledCount(s);
+            const total = SUPPLIERS[s].length;
+            const sTotal = getSupplierTotal(s);
+            return `
+              <button onclick="setState({supplier:'${s}',screen:'items',searchQuery:''})" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;margin-bottom:8px;background:${done?'var(--success-light)':'var(--card)'};border:1px solid ${done?'rgba(45,138,78,0.25)':'var(--border)'};border-radius:14px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+                <div style="text-align:left">
+                  <div style="font-size:15px;font-weight:600;color:var(--text)">${done?'<span style="color:var(--success);margin-right:6px">✓</span>':''}${s}</div>
+                  <div style="font-size:12px;color:var(--text-sub);margin-top:4px">${filled}/${total}品目入力済 ・ ¥${fmt(sTotal)}</div>
+                </div>
+                <span style="font-size:20px;color:var(--text-sub)">›</span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+        <div style="position:fixed;bottom:0;left:0;right:0;padding:16px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08)">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <span style="font-size:13px;color:var(--text-sub)">棚卸総合計</span>
+            <span style="font-size:22px;font-weight:700;color:var(--primary)">¥${fmt(Math.round(getGrandTotal()))}</span>
+          </div>
+          <button onclick="setState({screen:'confirm'})" style="width:100%;padding:14px;background:${allDone?'var(--primary)':'var(--text-sub)'};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer">
+            ${allDone ? '確認・提出へ →' : '入力状況を確認'}
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (state.screen === "items" && state.supplier) {
+    const items = SUPPLIERS[state.supplier] || [];
+    const q = state.searchQuery.toLowerCase();
+    const filtered = items.filter(item => q === "" || item.name.toLowerCase().includes(q));
+    
+    app.innerHTML = `
+      <div style="min-height:100vh;background:var(--bg);padding-bottom:100px">
+        <div style="background:var(--card);padding:16px;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:10">
+          <button onclick="setState({screen:'supplier',supplier:null,searchQuery:''})" style="background:var(--primary-light);border:none;color:var(--primary);font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;margin-bottom:10px;font-weight:600">← 取引先一覧に戻る</button>
+          <h3 style="font-size:18px;font-weight:700;color:var(--text);margin:0 0 4px">${state.supplier}</h3>
+          <div style="font-size:12px;color:var(--text-sub)">${items.length}品目 ・ 在庫数量を入力してください</div>
+          ${items.length > 8 ? `<input type="text" placeholder="品目を検索..." value="${state.searchQuery}" oninput="setState({searchQuery:this.value})" style="width:100%;padding:10px 14px;margin-top:10px;border:1px solid var(--border);border-radius:10px;font-size:14px;background:var(--bg);outline:none;box-sizing:border-box">` : ''}
+        </div>
+        <div style="padding:12px 16px">
+          ${filtered.map(item => {
+            const realIdx = items.indexOf(item);
+            const qty = state.inventory[state.supplier]?.[realIdx] ?? "";
+            const amount = qty !== "" && qty != null ? parseFloat(qty) * item.price : 0;
+            const hasValue = qty !== "" && qty != null && parseFloat(qty) > 0;
+            return `
+              <div style="background:${hasValue?'var(--success-light)':'var(--card)'};border:1px solid ${hasValue?'rgba(45,138,78,0.2)':'var(--border)'};border-radius:14px;padding:14px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+                <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px;line-height:1.4">${item.name}</div>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="flex:1"><div style="font-size:11px;color:var(--text-sub)">@¥${fmt(item.price)}/${item.unit}</div></div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <input type="number" inputmode="decimal" step="any" min="0" placeholder="0" value="${qty}"
+                      onchange="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
+                      oninput="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
+                      onfocus="this.select()"
+                      style="width:72px;padding:10px 8px;text-align:center;border:2px solid ${hasValue?'var(--success)':'var(--border)'};border-radius:10px;font-size:18px;font-weight:700;background:#fff;outline:none;color:${hasValue?'var(--success)':'var(--text)'}">
+                    <span style="font-size:13px;color:var(--text-sub);min-width:24px">${item.unit}</span>
+                  </div>
+                </div>
+                ${hasValue ? `<div style="text-align:right;font-size:13px;font-weight:600;color:var(--success);margin-top:6px">= ¥${fmt(Math.round(amount))}</div>` : ''}
+              </div>
+            `;
+          }).join("")}
+        </div>
+        <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08);z-index:20">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span style="font-size:12px;color:var(--text-sub)">${getFilledCount(state.supplier)}/${items.length}品目入力済</span>
+            <span style="font-size:18px;font-weight:700;color:var(--primary)">¥${fmt(Math.round(getSupplierTotal(state.supplier)))}</span>
+          </div>
+          <button onclick="state.completedSuppliers['${state.supplier}']=true;setState({screen:'supplier',supplier:null,searchQuery:''})" style="width:100%;padding:14px;background:var(--primary);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer">✓ この取引先の入力を完了</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (state.screen === "confirm") {
+    app.innerHTML = `
+      <div style="min-height:100vh;background:var(--bg);padding-bottom:140px">
+        <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:24px 16px 28px;border-radius:0 0 24px 24px">
+          <button onclick="setState({screen:'supplier'})" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;margin-bottom:12px">← 入力画面に戻る</button>
+          <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0">${state.store} 棚卸確認</h2>
+          <div style="margin-top:16px;background:rgba(255,255,255,0.15);border-radius:12px;padding:16px;text-align:center">
+            <div style="font-size:12px;color:rgba(255,255,255,0.7)">棚卸総合計金額</div>
+            <div style="font-size:28px;font-weight:800;color:#fff;margin-top:4px">¥${fmt(Math.round(getGrandTotal()))}</div>
+          </div>
+        </div>
+        <div style="padding:16px">
+          <h3 style="font-size:14px;color:var(--text-sub);margin-bottom:12px;font-weight:500">取引先別サマリー</h3>
+          ${SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).map(s => `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text)">${s}</div>
+                  <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${getFilledCount(s)}品目</div>
+                </div>
+                <div style="font-size:16px;font-weight:700;color:var(--primary)">¥${fmt(Math.round(getSupplierTotal(s)))}</div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+        <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px 24px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08)">
+          <button onclick="downloadCSV()" style="width:100%;padding:14px;margin-bottom:8px;background:#fff;color:var(--primary);border:2px solid var(--primary);border-radius:12px;font-size:15px;font-weight:600;cursor:pointer">CSVダウンロード（バックアップ）</button>
+          ${state.submitError ? `<div style="padding:10px 14px;margin-bottom:8px;background:var(--danger-light);border:1px solid rgba(201,68,68,0.25);border-radius:10px;font-size:13px;color:var(--danger)">${state.submitError}</div>` : ''}
+          <button onclick="submitToSheet()" ${state.submitting?'disabled':''} style="width:100%;padding:14px;background:${state.submitting?'var(--text-sub)':'var(--accent)'};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:${state.submitting?'default':'pointer'};opacity:${state.submitting?0.7:1}">
+            ${state.submitting ? '送信中...' : '提出する'}
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (state.screen === "done") {
+    app.innerHTML = `
+      <div style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center">
+        <div style="width:80px;height:80px;border-radius:50%;background:var(--success-light);display:flex;align-items:center;justify-content:center;margin-bottom:24px">
+          <span style="font-size:40px">✓</span>
+        </div>
+        <h2 style="font-size:22px;font-weight:700;color:var(--text);margin:0 0 8px">棚卸データを送信しました</h2>
+        <p style="font-size:14px;color:var(--text-sub);margin-bottom:32px">${state.store} ・ 合計 ¥${fmt(Math.round(getGrandTotal()))}</p>
+        <button onclick="resetAll()" style="padding:14px 32px;background:var(--primary);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer">最初に戻る</button>
+      </div>
+    `;
+    return;
+  }
+}
+
+// Initial render
+render();
+</script>
+</body>
+</html>
