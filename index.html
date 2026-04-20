@@ -38,6 +38,9 @@
 // ─── GAS Web App URL ───
 const GAS_URL = "https://script.google.com/macros/s/AKfycbzX8XHcpXFLF1MS8mLQJI13KBudy9jMTN2S2y4RR4ZXYcsJq0XWyWitCEz4bjB1v2yutA/exec";
 
+// ─── Passcode (URL知っているだけの第三者を防ぐ簡易ゲート) ───
+const PASSCODE = "2580";
+
 // ─── Store List ───
 const STORES = [
   "鴨池", "天文館", "大塚", "イオン中央", "姶良",
@@ -225,8 +228,9 @@ const SUPPLIER_LIST = Object.keys(SUPPLIERS);
 const fmt = (n) => n != null ? n.toLocaleString("ja-JP") : "—";
 
 // ─── App State ───
+const isAuthed = sessionStorage.getItem('tanaoroshi_auth') === '1';
 let state = {
-  screen: "store",
+  screen: isAuthed ? "store" : "auth",
   store: null,
   supplier: null,
   inventory: {},
@@ -234,7 +238,19 @@ let state = {
   searchQuery: "",
   submitting: false,
   submitError: null,
+  authError: null,
 };
+
+function authenticate() {
+  const input = document.getElementById('auth-input');
+  const v = input ? input.value : '';
+  if (v === PASSCODE) {
+    sessionStorage.setItem('tanaoroshi_auth', '1');
+    setState({ screen: "store", authError: null });
+  } else {
+    setState({ authError: "パスコードが違います" });
+  }
+}
 
 // Initialize inventory
 SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
@@ -371,7 +387,25 @@ function resetAll() {
 // ─── Render ───
 function render() {
   const app = document.getElementById("app");
-  
+
+  if (state.screen === "auth") {
+    app.innerHTML = `
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,var(--primary),var(--primary-dark))">
+        <div style="background:var(--card);border-radius:20px;padding:40px 28px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+          <h1 style="font-size:22px;font-weight:700;color:var(--text);margin:0 0 8px;text-align:center">棚卸入力</h1>
+          <p style="font-size:13px;color:var(--text-sub);text-align:center;margin-bottom:28px">パスコードを入力してください</p>
+          <input id="auth-input" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off"
+            onkeydown="if(event.key==='Enter')authenticate()"
+            style="width:100%;padding:16px;font-size:24px;text-align:center;letter-spacing:8px;border:2px solid var(--border);border-radius:12px;outline:none;font-family:inherit;margin-bottom:16px;box-sizing:border-box">
+          ${state.authError ? `<div style="color:var(--danger);font-size:13px;text-align:center;margin-bottom:16px">${state.authError}</div>` : ''}
+          <button onclick="authenticate()" style="width:100%;padding:14px;background:var(--primary);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer">入る</button>
+        </div>
+      </div>
+    `;
+    setTimeout(() => { const i = document.getElementById('auth-input'); if (i) i.focus(); }, 0);
+    return;
+  }
+
   if (state.screen === "store") {
     app.innerHTML = `
       <div style="min-height:100vh;background:var(--bg)">
