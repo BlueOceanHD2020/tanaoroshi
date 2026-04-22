@@ -227,6 +227,44 @@ const SUPPLIERS = {
 const SUPPLIER_LIST = Object.keys(SUPPLIERS);
 const fmt = (n) => n != null ? n.toLocaleString("ja-JP") : "—";
 
+// ─── Price Master API ───
+async function loadPriceMaster() {
+  try {
+    const res = await fetch(GAS_URL + '?action=getPriceMaster');
+    const json = await res.json();
+    if (json.status === 'ok') {
+      return json.data;
+    }
+  } catch(e) { console.error('単価マスター取得エラー:', e); }
+  return null;
+}
+
+function getSuppliersForStore(storeName, priceMaster) {
+  if (!priceMaster || !storeName) return SUPPLIERS;
+  const result = {};
+  for (const key of Object.keys(SUPPLIERS)) {
+    result[key] = SUPPLIERS[key];
+  }
+  const masterBySupplier = {};
+  for (const row of priceMaster) {
+    if (row.store !== storeName) continue;
+    if (!masterBySupplier[row.supplier]) masterBySupplier[row.supplier] = [];
+    masterBySupplier[row.supplier].push({ name: row.name, unit: row.unit, price: row.price });
+  }
+  for (const [supplier, items] of Object.entries(masterBySupplier)) {
+    result[supplier] = items;
+  }
+  return result;
+}
+
+function getActiveSuppliers() {
+  return getSuppliersForStore(state.store, state.priceMaster);
+}
+
+function getActiveSupplierList() {
+  return Object.keys(getActiveSuppliers());
+}
+
 // ─── App State ───
 const isAuthed = sessionStorage.getItem('tanaoroshi_auth') === '1';
 let state = {
@@ -239,6 +277,8 @@ let state = {
   submitting: false,
   submitError: null,
   authError: null,
+  priceMaster: null,
+  masterLoading: false,
 };
 
 function authenticate() {
@@ -252,6 +292,25 @@ function authenticate() {
   }
 }
 
+async function handleStoreSelect(storeName) {
+  state.store = storeName;
+  state.screen = 'supplier';
+  state.masterLoading = true;
+  state.priceMaster = null;
+  // inventoryを初期化（まだフォールバックのSUPPLIERS基準）
+  SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
+  render();
+  const master = await loadPriceMaster();
+  state.priceMaster = master;
+  state.masterLoading = false;
+  // マスター取得後、activeSupplierListで再初期化
+  const activeList = getActiveSupplierList();
+  const init = {};
+  activeList.forEach(s => { init[s] = {}; });
+  state.inventory = init;
+  render();
+}
+
 // Initialize inventory
 SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
 
@@ -261,7 +320,7 @@ function setState(updates) {
 }
 
 function getSupplierTotal(supplierName) {
-  const items = SUPPLIERS[supplierName] || [];
+  const items = getActiveSuppliers()[supplierName] || [];
   const inv = state.inventory[supplierName] || {};
   let total = 0;
   items.forEach((item, i) => {
@@ -273,7 +332,7 @@ function getSupplierTotal(supplierName) {
 
 function getGrandTotal() {
   let total = 0;
-  SUPPLIER_LIST.forEach(s => { total += getSupplierTotal(s); });
+  getActiveSupplierList().forEach(s => { total += getSupplierTotal(s); });
   return total;
 }
 
@@ -292,8 +351,8 @@ async function submitToSheet() {
   setState({ submitting: true, submitError: null });
   try {
     const items = [];
-    SUPPLIER_LIST.forEach(supplierName => {
-      const supplierItems = SUPPLIERS[supplierName] || [];
+    getActiveSupplierList().forEach(supplierName => {
+      const supplierItems = getActiveSuppliers()[supplierName] || [];
       const inv = state.inventory[supplierName] || {};
       supplierItems.forEach((item, i) => {
         const qty = inv[i];
@@ -349,8 +408,8 @@ async function submitToSheet() {
 
 function generateCSV() {
   let csv = "店舗名,取引先,品目,単位,仕入単価,在庫数量,金額\n";
-  SUPPLIER_LIST.forEach(s => {
-    const items = SUPPLIERS[s] || [];
+  getActiveSupplierList().forEach(s => {
+    const items = getActiveSuppliers()[s] || [];
     const inv = state.inventory[s] || {};
     items.forEach((item, i) => {
       const qty = inv[i];
@@ -381,6 +440,7 @@ function resetAll() {
     screen: "store", store: null, supplier: null,
     inventory: init, completedSuppliers: {},
     searchQuery: "", submitting: false, submitError: null,
+    priceMaster: null, masterLoading: false,
   });
 }
 
@@ -416,7 +476,7 @@ function render() {
         </div>
         <div style="padding:20px 16px">
           ${STORES.map(s => `
-            <button onclick="setState({store:'${s}',screen:'supplier'})" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:16px 18px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;font-size:16px;font-weight:600;color:var(--text);cursor:pointer;font-family:'Noto Sans JP',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+            <button onclick="handleStoreSelect('${s}')" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:16px 18px;margin-bottom:8px;background:var(--card);border:1px solid var(--border);border-radius:14px;font-size:16px;font-weight:600;color:var(--text);cursor:pointer;font-family:'Noto Sans JP',sans-serif;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
               <span>${s}</span><span style="font-size:20px;color:var(--text-sub)">›</span>
             </button>
           `).join("")}
@@ -427,19 +487,22 @@ function render() {
   }
 
   if (state.screen === "supplier") {
-    const allDone = SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).every(s => state.completedSuppliers[s]);
+    const activeSup = getActiveSuppliers();
+    const activeList = getActiveSupplierList();
+    const allDone = activeList.filter(s => (activeSup[s] || []).length > 0).every(s => state.completedSuppliers[s]);
     app.innerHTML = `
       <div style="min-height:100vh;background:var(--bg);padding-bottom:120px">
         <div style="background:linear-gradient(135deg,var(--primary),var(--primary-dark));padding:20px 16px 24px;border-radius:0 0 24px 24px">
-          <button onclick="setState({screen:'store',store:null,completedSuppliers:{}}); SUPPLIER_LIST.forEach(s=>{state.inventory[s]={}})" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;margin-bottom:12px">← 店舗選択に戻る</button>
+          <button onclick="resetAll()" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:13px;padding:6px 14px;border-radius:20px;cursor:pointer;margin-bottom:12px">← 店舗選択に戻る</button>
           <h2 style="color:#fff;font-size:20px;font-weight:700;margin:0 0 4px">${state.store}</h2>
           <div style="color:rgba(255,255,255,0.7);font-size:13px">取引先を選んで在庫数量を入力</div>
         </div>
         <div style="padding:16px">
-          ${SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).map(s => {
+          ${state.masterLoading ? '<div style="padding:12px 16px;margin-bottom:12px;background:var(--primary-light);border-radius:10px;font-size:13px;color:var(--primary);text-align:center">単価マスターを読み込み中...</div>' : ''}
+          ${activeList.filter(s => (activeSup[s] || []).length > 0).map(s => {
             const done = state.completedSuppliers[s];
             const filled = getFilledCount(s);
-            const total = SUPPLIERS[s].length;
+            const total = (activeSup[s] || []).length;
             const sTotal = getSupplierTotal(s);
             return `
               <button onclick="setState({supplier:'${s}',screen:'items',searchQuery:''})" style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;margin-bottom:8px;background:${done?'var(--success-light)':'var(--card)'};border:1px solid ${done?'rgba(45,138,78,0.25)':'var(--border)'};border-radius:14px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
@@ -467,7 +530,7 @@ function render() {
   }
 
   if (state.screen === "items" && state.supplier) {
-    const items = SUPPLIERS[state.supplier] || [];
+    const items = getActiveSuppliers()[state.supplier] || [];
     const q = state.searchQuery.toLowerCase();
     const filtered = items.filter(item => q === "" || item.name.toLowerCase().includes(q));
     
@@ -529,7 +592,7 @@ function render() {
         </div>
         <div style="padding:16px">
           <h3 style="font-size:14px;color:var(--text-sub);margin-bottom:12px;font-weight:500">取引先別サマリー</h3>
-          ${SUPPLIER_LIST.filter(s => SUPPLIERS[s].length > 0).map(s => `
+          ${getActiveSupplierList().filter(s => (getActiveSuppliers()[s] || []).length > 0).map(s => `
             <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <div>
