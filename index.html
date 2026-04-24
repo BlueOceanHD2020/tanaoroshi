@@ -272,6 +272,7 @@ let state = {
   store: null,
   supplier: null,
   inventory: {},
+  customItems: {},  // 取引先 → [{name, unit, price, qty}, ...]
   completedSuppliers: {},
   searchQuery: "",
   submitting: false,
@@ -297,8 +298,8 @@ async function handleStoreSelect(storeName) {
   state.screen = 'supplier';
   state.masterLoading = true;
   state.priceMaster = null;
-  // inventoryを初期化（まだフォールバックのSUPPLIERS基準）
-  SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
+  // inventory/customItemsを初期化（まだフォールバックのSUPPLIERS基準）
+  SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; state.customItems[s] = []; });
   render();
   const master = await loadPriceMaster();
   state.priceMaster = master;
@@ -306,13 +307,15 @@ async function handleStoreSelect(storeName) {
   // マスター取得後、activeSupplierListで再初期化
   const activeList = getActiveSupplierList();
   const init = {};
-  activeList.forEach(s => { init[s] = {}; });
+  const initCustom = {};
+  activeList.forEach(s => { init[s] = {}; initCustom[s] = []; });
   state.inventory = init;
+  state.customItems = initCustom;
   render();
 }
 
 // Initialize inventory
-SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; });
+SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; state.customItems[s] = []; });
 
 function setState(updates) {
   Object.assign(state, updates);
@@ -327,7 +330,33 @@ function getSupplierTotal(supplierName) {
     const qty = inv[i];
     if (qty != null && qty !== "") total += parseFloat(qty) * item.price;
   });
+  // 自由入力品目も合算
+  (state.customItems[supplierName] || []).forEach(ci => {
+    const p = parseFloat(ci.price), q = parseFloat(ci.qty);
+    if (!isNaN(p) && !isNaN(q)) total += p * q;
+  });
   return total;
+}
+
+function addCustomItem(supplier) {
+  if (!state.customItems[supplier]) state.customItems[supplier] = [];
+  state.customItems[supplier].push({ name: "", unit: "個", price: "", qty: "" });
+  render();
+}
+
+function removeCustomItem(supplier, idx) {
+  if (state.customItems[supplier]) {
+    state.customItems[supplier].splice(idx, 1);
+    render();
+  }
+}
+
+function updateCustomItem(supplier, idx, field, value) {
+  if (state.customItems[supplier] && state.customItems[supplier][idx]) {
+    state.customItems[supplier][idx][field] = value;
+    // 軽量レンダー: 合計だけ更新したいが簡略化のため再描画
+    render();
+  }
 }
 
 function getGrandTotal() {
@@ -364,6 +393,22 @@ async function submitToSheet() {
             price: item.price,
             quantity: parseFloat(qty),
             amount: Math.round(parseFloat(qty) * item.price),
+          });
+        }
+      });
+      // 自由入力品目
+      (state.customItems[supplierName] || []).forEach(ci => {
+        const name = (ci.name || "").trim();
+        const price = parseFloat(ci.price);
+        const qty = parseFloat(ci.qty);
+        if (name && !isNaN(price) && !isNaN(qty) && qty > 0) {
+          items.push({
+            supplier: supplierName,
+            name: "【自由入力】" + name,
+            unit: ci.unit || "個",
+            price: price,
+            quantity: qty,
+            amount: Math.round(price * qty),
           });
         }
       });
@@ -435,10 +480,11 @@ function downloadCSV() {
 
 function resetAll() {
   const init = {};
-  SUPPLIER_LIST.forEach(s => { init[s] = {}; });
+  const initCustom = {};
+  SUPPLIER_LIST.forEach(s => { init[s] = {}; initCustom[s] = []; });
   setState({
     screen: "store", store: null, supplier: null,
-    inventory: init, completedSuppliers: {},
+    inventory: init, customItems: initCustom, completedSuppliers: {},
     searchQuery: "", submitting: false, submitError: null,
     priceMaster: null, masterLoading: false,
   });
@@ -566,6 +612,48 @@ function render() {
               </div>
             `;
           }).join("")}
+          ${(() => {
+            const cs = state.customItems[state.supplier] || [];
+            return `
+              <div style="margin-top:18px;padding-top:14px;border-top:2px dashed var(--border)">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                  <div style="font-size:13px;font-weight:600;color:var(--text-sub)">自由入力（マスターにない品目）</div>
+                  <button onclick="addCustomItem('${state.supplier}')" style="background:var(--accent);color:#fff;border:none;padding:6px 14px;border-radius:18px;font-size:13px;font-weight:600;cursor:pointer">+ 行追加</button>
+                </div>
+                ${cs.map((ci, ci_i) => {
+                  const p = parseFloat(ci.price), q = parseFloat(ci.qty);
+                  const amt = (!isNaN(p) && !isNaN(q)) ? p * q : 0;
+                  return `
+                  <div style="background:var(--accent-light);border:1px solid rgba(196,118,58,0.25);border-radius:14px;padding:12px;margin-bottom:8px">
+                    <div style="display:flex;gap:6px;margin-bottom:8px">
+                      <input type="text" placeholder="品名を入力" value="${ci.name.replace(/"/g,'&quot;')}"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'name',this.value)"
+                        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;background:#fff">
+                      <select onchange="updateCustomItem('${state.supplier}',${ci_i},'unit',this.value)"
+                        style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;outline:none">
+                        ${['個','袋','箱','本','缶','枚','kg','g','L','ml','ケ','パック'].map(u => `<option value="${u}" ${ci.unit===u?'selected':''}>${u}</option>`).join('')}
+                      </select>
+                      <button onclick="removeCustomItem('${state.supplier}',${ci_i})" title="削除"
+                        style="background:var(--danger-light);color:var(--danger);border:none;width:32px;height:38px;border-radius:8px;cursor:pointer;font-size:16px;font-weight:700">×</button>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center">
+                      <input type="number" inputmode="decimal" step="any" min="0" placeholder="単価" value="${ci.price}"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'price',this.value)"
+                        onfocus="this.select()"
+                        style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:right;outline:none;background:#fff">
+                      <span style="font-size:13px;color:var(--text-sub)">円 ×</span>
+                      <input type="number" inputmode="decimal" step="any" min="0" placeholder="数量" value="${ci.qty}"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'qty',this.value)"
+                        onfocus="this.select()"
+                        style="width:80px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:center;outline:none;background:#fff">
+                      <span style="font-size:13px;color:var(--text-sub);min-width:36px;text-align:right">${amt > 0 ? '¥'+fmt(Math.round(amt)) : '—'}</span>
+                    </div>
+                  </div>
+                `;}).join('')}
+                ${cs.length === 0 ? `<div style="text-align:center;font-size:12px;color:var(--text-sub);padding:8px">「+ 行追加」で品名・単価・数量を直接入力できます</div>` : ''}
+              </div>
+            `;
+          })()}
         </div>
         <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08);z-index:20">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
