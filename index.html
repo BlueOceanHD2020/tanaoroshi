@@ -244,6 +244,7 @@ const SUPPLIERS = {
     { name: "トパックハンギングバッグ (東芝テック)", unit: "袋", price: 0.76 },
   ],
   "現地調達資材": [],
+  "西原商会": [],
 };
 
 const SUPPLIER_LIST = Object.keys(SUPPLIERS);
@@ -251,14 +252,28 @@ const fmt = (n) => n != null ? n.toLocaleString("ja-JP") : "—";
 
 // ─── Price Master API ───
 async function loadPriceMaster() {
+  const url = GAS_URL + '?action=getPriceMaster&v=' + Date.now();
+  console.log('[loadPriceMaster] fetching:', url);
   try {
-    const res = await fetch(GAS_URL + '?action=getPriceMaster');
+    const res = await fetch(url);
+    console.log('[loadPriceMaster] status:', res.status, 'ok:', res.ok);
+    if (!res.ok) {
+      state.masterError = `HTTPエラー ${res.status}`;
+      return null;
+    }
     const json = await res.json();
+    console.log('[loadPriceMaster] response status:', json.status, 'count:', (json.data || []).length);
     if (json.status === 'ok') {
+      state.masterError = null;
       return json.data;
     }
-  } catch(e) { console.error('単価マスター取得エラー:', e); }
-  return null;
+    state.masterError = 'GAS応答異常: ' + (json.message || 'unknown');
+    return null;
+  } catch(e) {
+    console.error('[loadPriceMaster] 単価マスター取得エラー:', e);
+    state.masterError = '通信エラー: ' + e.message;
+    return null;
+  }
 }
 
 function getSuppliersForStore(storeName, priceMaster) {
@@ -318,6 +333,7 @@ let state = {
   authError: null,
   priceMaster: null,
   masterLoading: false,
+  masterError: null,
 };
 
 function authenticate() {
@@ -331,10 +347,23 @@ function authenticate() {
   }
 }
 
+async function reloadMaster() {
+  if (!state.store) return;
+  state.masterLoading = true;
+  state.masterError = null;
+  state.priceMaster = null;
+  render();
+  const master = await loadPriceMaster();
+  state.priceMaster = master;
+  state.masterLoading = false;
+  render();
+}
+
 async function handleStoreSelect(storeName) {
   state.store = storeName;
   state.screen = 'supplier';
   state.masterLoading = true;
+  state.masterError = null;
   state.priceMaster = null;
   // inventory/customItemsを初期化（まだフォールバックのSUPPLIERS基準）
   SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; state.customItems[s] = []; });
@@ -602,6 +631,8 @@ function render() {
         </div>
         <div style="padding:16px">
           ${state.masterLoading ? '<div style="padding:12px 16px;margin-bottom:12px;background:var(--primary-light);border-radius:10px;font-size:13px;color:var(--primary);text-align:center">単価マスターを読み込み中...</div>' : ''}
+          ${state.masterError ? `<div style="padding:12px 16px;margin-bottom:12px;background:var(--danger-light);border:1px solid rgba(201,68,68,0.25);border-radius:10px;font-size:13px;color:var(--danger)">⚠ マスター読込失敗: ${state.masterError}<br><button onclick="reloadMaster()" style="margin-top:6px;padding:4px 12px;background:var(--danger);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">再読込</button></div>` : ''}
+          ${(!state.masterLoading && !state.masterError && state.priceMaster) ? `<div style="padding:6px 12px;margin-bottom:8px;background:var(--success-light);border-radius:8px;font-size:11px;color:var(--success);text-align:center">マスター${state.priceMaster.length}件読込済</div>` : ''}
           ${activeList.filter(s => (activeSup[s] || []).length > 0).map(s => {
             const done = state.completedSuppliers[s];
             const filled = getFilledCount(s);
@@ -634,6 +665,7 @@ function render() {
 
   if (state.screen === "items" && state.supplier) {
     const items = getActiveSuppliers()[state.supplier] || [];
+    console.log('[items render] store:', state.store, 'supplier:', state.supplier, 'items count:', items.length, 'priceMaster:', state.priceMaster ? state.priceMaster.length+'件' : 'null');
     const q = state.searchQuery.toLowerCase();
     const filtered = items.filter(item => q === "" || item.name.toLowerCase().includes(q));
     
