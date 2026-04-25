@@ -376,11 +376,11 @@ function removeCustomItem(supplier, idx) {
   }
 }
 
-function updateCustomItem(supplier, idx, field, value) {
+function updateCustomItem(supplier, idx, field, value, commit) {
   if (state.customItems[supplier] && state.customItems[supplier][idx]) {
     state.customItems[supplier][idx][field] = value;
-    // 軽量レンダー: 合計だけ更新したいが簡略化のため再描画
-    render();
+    // 入力中は state のみ更新（再描画しない）。blur で commit=true → 再描画
+    if (commit) render();
   }
 }
 
@@ -395,9 +395,9 @@ function getFilledCount(supplierName) {
   return Object.values(inv).filter(v => v != null && v !== "" && v !== 0 && v !== "0").length;
 }
 
-function handleQuantityChange(supplierName, itemIndex, value) {
+function handleQuantityChange(supplierName, itemIndex, value, commit) {
   state.inventory[supplierName][itemIndex] = value === "" ? "" : value;
-  render();
+  if (commit) render();
 }
 
 // ─── Submit to Google Sheets ───
@@ -646,8 +646,8 @@ function render() {
                   <div style="display:flex;align-items:center;gap:6px">
                     <input type="number" inputmode="decimal" step="any" min="0" placeholder="0" value="${qty}"
                       data-focus="item-qty-${realIdx}"
-                      onchange="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
-                      oninput="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
+                      onblur="handleQuantityChange('${state.supplier}',${realIdx},this.value,true)"
+                      oninput="handleQuantityChange('${state.supplier}',${realIdx},this.value,false)"
                       onfocus="this.select()"
                       style="width:72px;padding:10px 8px;text-align:center;border:2px solid ${hasValue?'var(--success)':'var(--border)'};border-radius:10px;font-size:18px;font-weight:700;background:#fff;outline:none;color:${hasValue?'var(--success)':'var(--text)'}">
                     <span style="font-size:13px;color:var(--text-sub);min-width:24px">${item.unit}</span>
@@ -673,7 +673,8 @@ function render() {
                     <div style="display:flex;gap:6px;margin-bottom:8px">
                       <input type="text" placeholder="品名を入力" value="${ci.name.replace(/"/g,'&quot;')}"
                         data-focus="ci-name-${ci_i}"
-                        oninput="updateCustomItem('${state.supplier}',${ci_i},'name',this.value)"
+                        onblur="updateCustomItem('${state.supplier}',${ci_i},'name',this.value,true)"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'name',this.value,false)"
                         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;background:#fff">
                       <select onchange="updateCustomItem('${state.supplier}',${ci_i},'unit',this.value)"
                         style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;outline:none">
@@ -685,13 +686,15 @@ function render() {
                     <div style="display:flex;gap:6px;align-items:center">
                       <input type="number" inputmode="numeric" step="1" min="0" placeholder="単価" value="${ci.price}"
                         data-focus="ci-price-${ci_i}"
-                        oninput="updateCustomItem('${state.supplier}',${ci_i},'price',this.value)"
+                        onblur="updateCustomItem('${state.supplier}',${ci_i},'price',this.value,true)"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'price',this.value,false)"
                         onfocus="this.select()"
                         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:right;outline:none;background:#fff">
                       <span style="font-size:13px;color:var(--text-sub)">円 ×</span>
                       <input type="number" inputmode="decimal" step="any" min="0" placeholder="数量" value="${ci.qty}"
                         data-focus="ci-qty-${ci_i}"
-                        oninput="updateCustomItem('${state.supplier}',${ci_i},'qty',this.value)"
+                        onblur="updateCustomItem('${state.supplier}',${ci_i},'qty',this.value,true)"
+                        oninput="updateCustomItem('${state.supplier}',${ci_i},'qty',this.value,false)"
                         onfocus="this.select()"
                         style="width:80px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:center;outline:none;background:#fff">
                       <span style="font-size:13px;color:var(--text-sub);min-width:36px;text-align:right">${amt > 0 ? '¥'+fmt(Math.round(amt)) : '—'}</span>
