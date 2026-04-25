@@ -518,6 +518,25 @@ function resetAll() {
 // ─── Render ───
 function render() {
   const app = document.getElementById("app");
+  // フォーカス保持: data-focus属性でinput要素を識別、再描画後に復元
+  const prev = document.activeElement;
+  let focusKey = null, selStart = 0, selEnd = 0;
+  if (prev && prev.dataset && prev.dataset.focus) {
+    focusKey = prev.dataset.focus;
+    try { selStart = prev.selectionStart || 0; selEnd = prev.selectionEnd || 0; } catch(e) {}
+  }
+  // 内部ヘルパで本体描画後に復元
+  const restore = () => {
+    if (!focusKey) return;
+    const el = document.querySelector('[data-focus="' + focusKey + '"]');
+    if (el) {
+      el.focus();
+      try { el.setSelectionRange(selStart, selEnd); } catch(e) {}
+    }
+  };
+  // 既存処理が return する全ブランチで restore() を呼ぶため、
+  // app.innerHTML を書き換えた直後にマイクロタスクで復元する
+  Promise.resolve().then(restore);
 
   if (state.screen === "auth") {
     app.innerHTML = `
@@ -626,6 +645,7 @@ function render() {
                   <div style="flex:1"><div style="font-size:11px;color:var(--text-sub)">@¥${fmt(item.price)}/${item.unit}</div></div>
                   <div style="display:flex;align-items:center;gap:6px">
                     <input type="number" inputmode="decimal" step="any" min="0" placeholder="0" value="${qty}"
+                      data-focus="item-qty-${realIdx}"
                       onchange="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
                       oninput="handleQuantityChange('${state.supplier}',${realIdx},this.value)"
                       onfocus="this.select()"
@@ -652,6 +672,7 @@ function render() {
                   <div style="background:var(--accent-light);border:1px solid rgba(196,118,58,0.25);border-radius:14px;padding:12px;margin-bottom:8px">
                     <div style="display:flex;gap:6px;margin-bottom:8px">
                       <input type="text" placeholder="品名を入力" value="${ci.name.replace(/"/g,'&quot;')}"
+                        data-focus="ci-name-${ci_i}"
                         oninput="updateCustomItem('${state.supplier}',${ci_i},'name',this.value)"
                         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;background:#fff">
                       <select onchange="updateCustomItem('${state.supplier}',${ci_i},'unit',this.value)"
@@ -663,11 +684,13 @@ function render() {
                     </div>
                     <div style="display:flex;gap:6px;align-items:center">
                       <input type="number" inputmode="numeric" step="1" min="0" placeholder="単価" value="${ci.price}"
+                        data-focus="ci-price-${ci_i}"
                         oninput="updateCustomItem('${state.supplier}',${ci_i},'price',this.value)"
                         onfocus="this.select()"
                         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:right;outline:none;background:#fff">
                       <span style="font-size:13px;color:var(--text-sub)">円 ×</span>
                       <input type="number" inputmode="decimal" step="any" min="0" placeholder="数量" value="${ci.qty}"
+                        data-focus="ci-qty-${ci_i}"
                         oninput="updateCustomItem('${state.supplier}',${ci_i},'qty',this.value)"
                         onfocus="this.select()"
                         style="width:80px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:center;outline:none;background:#fff">
