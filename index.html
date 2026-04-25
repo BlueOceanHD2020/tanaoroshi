@@ -22,6 +22,19 @@
   input[type="number"] {
     -moz-appearance: textfield;
   }
+  /* 送信中スピナー */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.35);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: -3px;
+    margin-right: 8px;
+  }
   :root {
     --primary: #2D5A3D;
     --primary-light: #E8F0EB;
@@ -746,8 +759,8 @@ function render() {
         <div style="position:fixed;bottom:0;left:0;right:0;padding:12px 16px 24px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08)">
           <button onclick="downloadCSV()" style="width:100%;padding:14px;margin-bottom:8px;background:#fff;color:var(--primary);border:2px solid var(--primary);border-radius:12px;font-size:15px;font-weight:600;cursor:pointer">CSVダウンロード（バックアップ）</button>
           ${state.submitError ? `<div style="padding:10px 14px;margin-bottom:8px;background:var(--danger-light);border:1px solid rgba(201,68,68,0.25);border-radius:10px;font-size:13px;color:var(--danger)">${state.submitError}</div>` : ''}
-          <button onclick="submitToSheet()" ${state.submitting?'disabled':''} style="width:100%;padding:14px;background:${state.submitting?'var(--text-sub)':'var(--accent)'};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:${state.submitting?'default':'pointer'};opacity:${state.submitting?0.7:1}">
-            ${state.submitting ? '送信中...' : '提出する'}
+          <button onclick="submitToSheet()" ${state.submitting?'disabled':''} style="width:100%;padding:14px;background:${state.submitting?'var(--text-sub)':'var(--accent)'};color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:${state.submitting?'default':'pointer'};opacity:${state.submitting?0.85:1};display:flex;align-items:center;justify-content:center;gap:4px">
+            ${state.submitting ? '<span class="spinner"></span>送信中...' : '提出する'}
           </button>
         </div>
       </div>
