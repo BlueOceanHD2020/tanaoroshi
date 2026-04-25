@@ -254,14 +254,30 @@ function getSuppliersForStore(storeName, priceMaster) {
   for (const key of Object.keys(SUPPLIERS)) {
     result[key] = SUPPLIERS[key];
   }
+  // 備考フラグの優先度: 棚卸対象=0 (上), OCRのみ=1 (下), 未マッチ=2 (除外)
+  const flagOrder = (note) => {
+    const head = (note || '').split(' / ')[0];
+    if (head === '棚卸対象') return 0;
+    if (head === 'OCRのみ') return 1;
+    return 2;  // 未マッチ or その他
+  };
   const masterBySupplier = {};
   for (const row of priceMaster) {
     if (row.store !== storeName) continue;
+    const ord = flagOrder(row.note);
+    if (ord === 2) continue;  // 未マッチは表示しない
     if (!masterBySupplier[row.supplier]) masterBySupplier[row.supplier] = [];
-    masterBySupplier[row.supplier].push({ name: row.name, unit: row.unit, price: row.price });
+    masterBySupplier[row.supplier].push({
+      name: row.name, unit: row.unit, price: row.price, _order: ord, _note: row.note,
+    });
   }
-  for (const [supplier, items] of Object.entries(masterBySupplier)) {
-    result[supplier] = items;
+  // ソート: 棚卸対象→OCRのみ、その中では品名昇順
+  for (const supplier of Object.keys(masterBySupplier)) {
+    masterBySupplier[supplier].sort((a, b) => {
+      if (a._order !== b._order) return a._order - b._order;
+      return (a.name || '').localeCompare(b.name || '', 'ja');
+    });
+    result[supplier] = masterBySupplier[supplier];
   }
   return result;
 }
