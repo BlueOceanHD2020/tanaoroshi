@@ -13,6 +13,15 @@
     color: #2C2C2C;
     -webkit-tap-highlight-color: transparent;
   }
+  /* スピンボタン非表示（数値入力欄を直接編集しやすく） */
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
   :root {
     --primary: #2D5A3D;
     --primary-light: #E8F0EB;
@@ -637,7 +646,7 @@ function render() {
                         style="background:var(--danger-light);color:var(--danger);border:none;width:32px;height:38px;border-radius:8px;cursor:pointer;font-size:16px;font-weight:700">×</button>
                     </div>
                     <div style="display:flex;gap:6px;align-items:center">
-                      <input type="number" inputmode="decimal" step="any" min="0" placeholder="単価" value="${ci.price}"
+                      <input type="number" inputmode="numeric" step="1" min="0" placeholder="単価" value="${ci.price}"
                         oninput="updateCustomItem('${state.supplier}',${ci_i},'price',this.value)"
                         onfocus="this.select()"
                         style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:right;outline:none;background:#fff">
