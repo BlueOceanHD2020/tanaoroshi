@@ -633,12 +633,17 @@ function render() {
           ${state.masterLoading ? '<div style="padding:12px 16px;margin-bottom:12px;background:var(--primary-light);border-radius:10px;font-size:13px;color:var(--primary);text-align:center">単価マスターを読み込み中...</div>' : ''}
           ${state.masterError ? `<div style="padding:12px 16px;margin-bottom:12px;background:var(--danger-light);border:1px solid rgba(201,68,68,0.25);border-radius:10px;font-size:13px;color:var(--danger)">⚠ マスター読込失敗: ${state.masterError}<br><button onclick="reloadMaster()" style="margin-top:6px;padding:4px 12px;background:var(--danger);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">再読込</button></div>` : ''}
           ${(!state.masterLoading && !state.masterError && state.priceMaster) ? (() => {
-            const storeCount = state.priceMaster.filter(r => {
+            // 取引先カードの 0/N と整合する数: getActiveSuppliers の各配列長合計
+            const totalCount = Object.values(activeSup).reduce((sum, arr) => sum + (arr || []).length, 0);
+            // 内訳: マスター由来 vs フォールバック
+            const masterCount = state.priceMaster.filter(r => {
               if (r.store !== state.store) return false;
               const head = (r.note || '').split(' / ')[0];
               return head === '棚卸対象' || head === 'OCRのみ';
             }).length;
-            return `<div style="padding:6px 12px;margin-bottom:8px;background:var(--success-light);border-radius:8px;font-size:11px;color:var(--success);text-align:center">マスター読込済 / ${state.store}: ${storeCount}品目</div>`;
+            const fallbackCount = totalCount - masterCount;
+            const breakdown = fallbackCount > 0 ? ` (マスター${masterCount} + 既定${fallbackCount})` : '';
+            return `<div style="padding:6px 12px;margin-bottom:8px;background:var(--success-light);border-radius:8px;font-size:11px;color:var(--success);text-align:center">マスター読込済 / ${state.store}: ${totalCount}品目${breakdown}</div>`;
           })() : ''}
           ${activeList.filter(s => (activeSup[s] || []).length > 0).map(s => {
             const done = state.completedSuppliers[s];
