@@ -326,6 +326,7 @@ let state = {
   supplier: null,
   inventory: {},
   customItems: {},  // 取引先 → [{name, unit, price, qty}, ...]
+  customSuppliers: [],  // [{id, supplierName, items: [{id, name, unit, price, qty}, ...]}, ...] — 自由入力業者
   completedSuppliers: {},
   searchQuery: "",
   submitting: false,
@@ -365,6 +366,7 @@ async function handleStoreSelect(storeName) {
   state.masterLoading = true;
   state.masterError = null;
   state.priceMaster = null;
+  state.customSuppliers = [];
   // inventory/customItemsを初期化（まだフォールバックのSUPPLIERS基準）
   SUPPLIER_LIST.forEach(s => { state.inventory[s] = {}; state.customItems[s] = []; });
   render();
@@ -426,9 +428,73 @@ function updateCustomItem(supplier, idx, field, value, commit) {
   }
 }
 
+// ─── Custom suppliers (自由入力業者) ───
+function genCsId() { return 'cs_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+
+function addCustomSupplier() {
+  state.customSuppliers.push({ id: genCsId(), supplierName: '', items: [] });
+  render();
+}
+
+function removeCustomSupplier(id) {
+  state.customSuppliers = state.customSuppliers.filter(s => s.id !== id);
+  render();
+}
+
+function updateCustomSupplierName(id, value, commit) {
+  const cs = state.customSuppliers.find(s => s.id === id);
+  if (!cs) return;
+  cs.supplierName = value;
+  if (commit) render();
+}
+
+function addCustomSupplierItem(csId) {
+  const cs = state.customSuppliers.find(s => s.id === csId);
+  if (!cs) return;
+  cs.items.push({ id: genCsId(), name: '', unit: '個', price: '', qty: '' });
+  render();
+}
+
+function removeCustomSupplierItem(csId, itemId) {
+  const cs = state.customSuppliers.find(s => s.id === csId);
+  if (!cs) return;
+  cs.items = cs.items.filter(it => it.id !== itemId);
+  render();
+}
+
+function updateCustomSupplierItem(csId, itemId, field, value, commit) {
+  const cs = state.customSuppliers.find(s => s.id === csId);
+  if (!cs) return;
+  const it = cs.items.find(i => i.id === itemId);
+  if (!it) return;
+  it[field] = value;
+  if (commit) render();
+}
+
+function getCustomSupplierTotal(csId) {
+  const cs = state.customSuppliers.find(s => s.id === csId);
+  if (!cs) return 0;
+  let total = 0;
+  cs.items.forEach(it => {
+    const p = parseFloat(it.price), q = parseFloat(it.qty);
+    if (!isNaN(p) && !isNaN(q)) total += p * q;
+  });
+  return total;
+}
+
+function getCustomSupplierFilledCount(csId) {
+  const cs = state.customSuppliers.find(s => s.id === csId);
+  if (!cs) return 0;
+  return cs.items.filter(it => {
+    const q = parseFloat(it.qty);
+    return !isNaN(q) && q > 0;
+  }).length;
+}
+
 function getGrandTotal() {
   let total = 0;
   getActiveSupplierList().forEach(s => { total += getSupplierTotal(s); });
+  state.customSuppliers.forEach(cs => { total += getCustomSupplierTotal(cs.id); });
   return total;
 }
 
@@ -473,6 +539,26 @@ async function submitToSheet() {
             supplier: supplierName,
             name: "【自由入力】" + name,
             unit: ci.unit || "個",
+            price: price,
+            quantity: qty,
+            amount: Math.round(price * qty),
+          });
+        }
+      });
+    });
+    // 自由入力業者
+    state.customSuppliers.forEach(cs => {
+      const sn = (cs.supplierName || '').trim();
+      if (!sn) return;
+      cs.items.forEach(it => {
+        const name = (it.name || '').trim();
+        const price = parseFloat(it.price);
+        const qty = parseFloat(it.qty);
+        if (name && !isNaN(price) && !isNaN(qty) && qty > 0) {
+          items.push({
+            supplier: '【自由入力業者】' + sn,
+            name: '【自由入力】' + name,
+            unit: it.unit || '個',
             price: price,
             quantity: qty,
             amount: Math.round(price * qty),
@@ -530,6 +616,26 @@ function generateCSV() {
         csv += `"${state.store}","${s}","${item.name}","${item.unit}",${item.price},${qty},${amount}\n`;
       }
     });
+    // 取引先内 自由入力品目
+    (state.customItems[s] || []).forEach(ci => {
+      const name = (ci.name || '').trim();
+      const p = parseFloat(ci.price), q = parseFloat(ci.qty);
+      if (name && !isNaN(p) && !isNaN(q) && q > 0) {
+        csv += `"${state.store}","${s}","【自由入力】${name}","${ci.unit||'個'}",${p},${q},${Math.round(p*q)}\n`;
+      }
+    });
+  });
+  // 自由入力業者
+  state.customSuppliers.forEach(cs => {
+    const sn = (cs.supplierName || '').trim();
+    if (!sn) return;
+    cs.items.forEach(it => {
+      const name = (it.name || '').trim();
+      const p = parseFloat(it.price), q = parseFloat(it.qty);
+      if (name && !isNaN(p) && !isNaN(q) && q > 0) {
+        csv += `"${state.store}","【自由入力業者】${sn}","【自由入力】${name}","${it.unit||'個'}",${p},${q},${Math.round(p*q)}\n`;
+      }
+    });
   });
   return csv;
 }
@@ -551,7 +657,8 @@ function resetAll() {
   SUPPLIER_LIST.forEach(s => { init[s] = {}; initCustom[s] = []; });
   setState({
     screen: "store", store: null, supplier: null,
-    inventory: init, customItems: initCustom, completedSuppliers: {},
+    inventory: init, customItems: initCustom, customSuppliers: [],
+    completedSuppliers: {},
     searchQuery: "", submitting: false, submitError: null,
     priceMaster: null, masterLoading: false,
   });
@@ -660,6 +767,75 @@ function render() {
               </button>
             `;
           }).join("")}
+          <div style="margin-top:24px;padding-top:16px;border-top:2px dashed var(--border)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:0 4px">
+              <div style="font-size:13px;font-weight:600;color:var(--accent)">マスターにない取引先（自由入力）</div>
+            </div>
+            ${state.customSuppliers.map(cs => {
+              const sn = cs.supplierName || '';
+              const filled = getCustomSupplierFilledCount(cs.id);
+              const csTotal = getCustomSupplierTotal(cs.id);
+              const hasName = sn.trim().length > 0;
+              return `
+                <div style="background:var(--card);border:1px solid var(--accent);border-radius:14px;padding:14px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+                  <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+                    <input type="text" placeholder="業者名を入力（例：地元青果店）" value="${sn.replace(/"/g,'&quot;')}"
+                      data-focus="cs-name-${cs.id}"
+                      onblur="updateCustomSupplierName('${cs.id}',this.value,true)"
+                      oninput="updateCustomSupplierName('${cs.id}',this.value,false)"
+                      style="flex:1;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:15px;font-weight:600;outline:none;background:#fff">
+                    <button onclick="if(confirm('この自由入力業者を削除しますか？'))removeCustomSupplier('${cs.id}')" title="削除"
+                      style="background:var(--danger-light);color:var(--danger);border:none;width:36px;height:42px;border-radius:8px;cursor:pointer;font-size:18px;font-weight:700;flex-shrink:0">×</button>
+                  </div>
+                  ${hasName ? `
+                    ${cs.items.map(it => {
+                      const p = parseFloat(it.price), q = parseFloat(it.qty);
+                      const amt = (!isNaN(p) && !isNaN(q)) ? p * q : 0;
+                      const hasQty = !isNaN(q) && q > 0;
+                      return `
+                        <div style="background:${hasQty?'var(--success-light)':'var(--accent-light)'};border:1px solid ${hasQty?'rgba(45,138,78,0.25)':'rgba(196,118,58,0.25)'};border-radius:12px;padding:10px;margin-bottom:8px">
+                          <div style="display:flex;gap:6px;margin-bottom:8px">
+                            <input type="text" placeholder="品名を入力" value="${(it.name||'').replace(/"/g,'&quot;')}"
+                              data-focus="csi-name-${it.id}"
+                              onblur="updateCustomSupplierItem('${cs.id}','${it.id}','name',this.value,true)"
+                              oninput="updateCustomSupplierItem('${cs.id}','${it.id}','name',this.value,false)"
+                              style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;outline:none;background:#fff">
+                            <select onchange="updateCustomSupplierItem('${cs.id}','${it.id}','unit',this.value,true)"
+                              style="padding:8px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:#fff;outline:none">
+                              ${['個','袋','箱','本','缶','枚','kg','g','L','ml','ケ','パック'].map(u => `<option value="${u}" ${it.unit===u?'selected':''}>${u}</option>`).join('')}
+                            </select>
+                            <button onclick="removeCustomSupplierItem('${cs.id}','${it.id}')" title="削除"
+                              style="background:var(--danger-light);color:var(--danger);border:none;width:32px;height:38px;border-radius:8px;cursor:pointer;font-size:16px;font-weight:700">×</button>
+                          </div>
+                          <div style="display:flex;gap:6px;align-items:center">
+                            <input type="number" inputmode="numeric" step="1" min="0" placeholder="単価" value="${it.price}"
+                              data-focus="csi-price-${it.id}"
+                              onblur="updateCustomSupplierItem('${cs.id}','${it.id}','price',this.value,true)"
+                              oninput="updateCustomSupplierItem('${cs.id}','${it.id}','price',this.value,false)"
+                              onfocus="this.select()"
+                              style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;text-align:right;outline:none;background:#fff">
+                            <span style="font-size:13px;color:var(--text-sub)">円 ×</span>
+                            <input type="number" inputmode="decimal" step="any" min="0" placeholder="数量" value="${it.qty}"
+                              data-focus="csi-qty-${it.id}"
+                              onblur="updateCustomSupplierItem('${cs.id}','${it.id}','qty',this.value,true)"
+                              oninput="updateCustomSupplierItem('${cs.id}','${it.id}','qty',this.value,false)"
+                              onfocus="this.select()"
+                              style="width:80px;padding:8px 10px;border:2px solid ${hasQty?'var(--success)':'var(--border)'};border-radius:8px;font-size:14px;font-weight:700;text-align:center;outline:none;background:#fff;color:${hasQty?'var(--success)':'var(--text)'}">
+                            <span style="font-size:13px;color:var(--text-sub);min-width:36px;text-align:right">${amt > 0 ? '¥'+fmt(Math.round(amt)) : '—'}</span>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                    <button onclick="addCustomSupplierItem('${cs.id}')"
+                      style="width:100%;padding:8px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-top:2px">+ 品目を追加</button>
+                    ${cs.items.length > 0 ? `<div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px;padding-top:8px;border-top:1px solid var(--border)"><span style="font-size:11px;color:var(--text-sub)">${filled}品目入力済</span><span style="font-size:15px;font-weight:700;color:var(--accent)">¥${fmt(Math.round(csTotal))}</span></div>` : ''}
+                  ` : '<div style="font-size:12px;color:var(--text-sub);text-align:center;padding:8px;background:var(--bg);border-radius:8px">業者名を入力すると品目を追加できます</div>'}
+                </div>
+              `;
+            }).join('')}
+            <button onclick="addCustomSupplier()"
+              style="width:100%;padding:14px;background:var(--card);color:var(--accent);border:2px dashed var(--accent);border-radius:14px;font-size:15px;font-weight:600;cursor:pointer">+ 業者を自由入力</button>
+          </div>
         </div>
         <div style="position:fixed;bottom:0;left:0;right:0;padding:16px;background:var(--card);border-top:1px solid var(--border);box-shadow:0 -4px 20px rgba(0,0,0,0.08)">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -796,6 +972,17 @@ function render() {
                   <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${getFilledCount(s)}品目</div>
                 </div>
                 <div style="font-size:16px;font-weight:700;color:var(--primary)">¥${fmt(Math.round(getSupplierTotal(s)))}</div>
+              </div>
+            </div>
+          `).join("")}
+          ${state.customSuppliers.filter(cs => (cs.supplierName||'').trim() && getCustomSupplierFilledCount(cs.id) > 0).map(cs => `
+            <div style="background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,0.03)">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div>
+                  <div style="font-size:14px;font-weight:600;color:var(--text)">【自由入力業者】${(cs.supplierName||'').replace(/</g,'&lt;')}</div>
+                  <div style="font-size:12px;color:var(--text-sub);margin-top:2px">${getCustomSupplierFilledCount(cs.id)}品目</div>
+                </div>
+                <div style="font-size:16px;font-weight:700;color:var(--accent)">¥${fmt(Math.round(getCustomSupplierTotal(cs.id)))}</div>
               </div>
             </div>
           `).join("")}
